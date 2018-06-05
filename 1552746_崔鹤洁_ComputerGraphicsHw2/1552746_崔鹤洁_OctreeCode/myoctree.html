@@ -1,0 +1,197 @@
+<html lang="en">
+
+<head>
+    <title>Octree</title>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+        }
+        div, body {margin: 0; padding: 0; }
+        input[type="number"] {width: 50px;}
+        input[type="range"] {width: 50px;}
+        label {display: inline-block; width: 120px; color: white}
+        .setting{margin: 20px; }
+    </style>
+</head>
+
+<body>
+
+<form id="settings">
+    <div class="setting" style="position: absolute; z-index: 10000;">
+        <div class="setting">
+            <h3 style="color:white;">Point Settings</h3>
+            <label>length (0-500): </label><input type="number" id="length" min="0" max="512" step="1" value="12"/><br/>
+            <label>width (0-500): </label><input type="number" id="width" min="0" max="512" step="1" value="13"/><br/>
+            <label>height (0-500): </label><input type="number" id="height" min="0" max="512" step="1" value="14"/><br/>
+            <br />
+            <button id="add" type="button" onclick="addpo()">add</button>
+            <button id="search" type="button" onclick="searchPoint()">search</button>
+            <button id="remove" type="button" onclick="dele()">remove</button>
+            <button id="auto" type="button" onclick="start()">start</button>
+            <button id="stop" type="button" onclick="cancel()">stop</button>
+            <h4 style="color:red;">Zoom or rotate to see mare details!!</h4>
+        </div>
+    </div>
+</form>
+
+<div id="three">
+</div>
+
+</body>
+
+<script type="text/javascript" src="three.js"></script>
+<script type="text/javascript" src="myoctree.js"></script>
+<script type="text/javascript" src="control.js"></script>
+
+<!--Visualization script--using three.js-->
+<script>
+    function drawView(node) {
+        if(node.end) {
+            let sphereGeometry = new THREE.SphereGeometry(5, 5, 5);
+            let sphereMaterial = new THREE.MeshBasicMaterial({color: 'red', wireframe: true});
+            let sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphere.position.x = node.point[0];
+            sphere.position.y = node.point[1];
+            sphere.position.z = node.point[2];
+            scene.add(sphere);
+        }
+        let cubeGeometry = new THREE.BoxGeometry(node.size[0], node.size[1], node.size[2]);
+        let cubeMaterial = new THREE.MeshBasicMaterial({color: 'yellow', wireframe: true});
+        let cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+        cube.position.x = node.startPoint[0] + Math.floor(node.size[0]/2);
+        cube.position.y = node.startPoint[1] + Math.floor(node.size[1]/2);
+        cube.position.z = node.startPoint[2] + Math.floor(node.size[2]/2);
+        scene.add(cube);
+        for(let i=0; i<8; i++)
+            if(node.childNodes[i]!==null)
+                drawView(node.childNodes[i]);
+    }
+
+    var octree = new Octree([512, 512, 512]);
+    octree.Insert([500,500,500]);
+    var scene = new THREE.Scene();
+
+    var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 3000);
+    var renderer = new THREE.WebGLRenderer();
+
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('three').appendChild(renderer.domElement);
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.target.set(256, 256, 256);
+    var parent = octree.root;
+    drawView(parent);
+    camera.position.set(1000, 1000, 1000);
+    camera.lookAt(new THREE.Vector3(256,256,256));
+    render();
+
+    var num = 1;
+    var pointNum = 1;
+    var points = [];
+    var up = true;
+    var auto = true;
+    var pnum = 11;
+
+    var testPoint = [[44,207,328], [43,206,326], [29,350,12], [461,158,316], [17,154,138], [302,46,436], [56,342,164],[432,286,345], [461,484,321], [16,115,244]];
+
+    // rendering the canvas animation
+    function render() {
+        requestAnimationFrame(render);
+        controls.update();
+        if(auto) {
+            if(num%50===0&&pointNum<pnum&&up) {
+                let a = testPoint[pointNum-1][0];
+                let b = testPoint[pointNum-1][1];
+                let c = testPoint[pointNum-1][2];
+                addPoint([a,b,c]);
+                points.push([a,b,c]);
+                pointNum++;
+                if(pointNum>=pnum)
+                    up = false;
+                console.log('insert!')
+            }
+            if(num%50===0&&pointNum>=0&&!up) {
+                removePoint(points.pop());
+                pointNum--;
+                if(pointNum<=1)
+                    up = true;
+                console.log('delete!')
+            }
+            num++;
+        }
+        renderer.render(scene, camera);
+    }
+
+    // add points
+    function addpo() {
+        let len = document.getElementById('length').value;
+        let wid = document.getElementById('width').value;
+        let hei = document.getElementById('height').value;
+        addPoint([parseInt(len),parseInt(wid),parseInt(hei)]);
+    }
+
+    // auto start
+    function start() {
+        auto = true;
+    }
+
+    // pause the auto adding action
+    function cancel() {
+        auto = false
+    }
+
+    // delete points
+    function dele(){
+        let len = document.getElementById('length').value;
+        let wid = document.getElementById('width').value;
+        let hei = document.getElementById('height').value;
+        removePoint([parseInt(len),parseInt(wid),parseInt(hei)]);
+    }
+
+    function addPoint(point) {
+        octree.Insert(point);
+        for( let i = scene.children.length - 1; i >= 0; i--) {
+            scene.remove(scene.children[i]);
+        }
+        drawView(octree.root);
+    }
+
+    function removePoint(point) {
+        let re = octree.Delete(point);
+        if(re) {
+            for( let i = scene.children.length - 1; i >= 0; i--) {
+                scene.remove(scene.children[i]);
+            }
+            drawView(octree.root);
+        }
+    }
+
+    // search points
+    function searchPoint() {
+        let len = document.getElementById('length').value;
+        let wid = document.getElementById('width').value;
+        let hei = document.getElementById('height').value;
+
+        let node = octree.Search([parseInt(len),parseInt(wid),parseInt(hei)]);
+
+        if (node!==null) {
+            let output = `范围x(${node.startPoint[0]},${node.startPoint[0]+node.size[0]}), y(${node.startPoint[1]},${node.startPoint[1]+node.size[1]}), z(${node.startPoint[2]},${node.startPoint[2]+node.size[2]})`;
+            console.log(output);
+            let cubeGeometry = new THREE.BoxGeometry(node.size[0], node.size[1], node.size[2]);
+            let cubeMaterial = new THREE.MeshBasicMaterial({color: '#A5DEE4', wireframe: true});
+            var cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+            cube.position.x = node.startPoint[0] + Math.floor(node.size[0]/2);
+            cube.position.y = node.startPoint[1] + Math.floor(node.size[1]/2);
+            cube.position.z = node.startPoint[2] + Math.floor(node.size[2]/2);
+            scene.add(cube);
+//            setTimeout(function(){scene.remove(cube);},50000);
+        }
+        else {
+            alert('can not find!')
+        }
+    }
+
+</script>
+</body>
+</html>
